@@ -1,0 +1,167 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Banking DevOps Practice Infrastructure
+  VPC, Public Subnet, Internet Gateway, Route Table,
+  Security Group and EC2
+
+Parameters:
+
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+
+  PublicSubnetCIDR:
+    Type: String
+    Default: 10.0.1.0/24
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+
+Resources:
+
+  # -----------------------------
+  # VPC
+  # -----------------------------
+
+  BankingVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: banking-devops-vpc
+
+  # -----------------------------
+  # Internet Gateway
+  # -----------------------------
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: banking-devops-igw
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref BankingVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # -----------------------------
+  # Public Subnet
+  # -----------------------------
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref BankingVPC
+      CidrBlock: !Ref PublicSubnetCIDR
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      Tags:
+        - Key: Name
+          Value: banking-public-subnet
+
+  # -----------------------------
+  # Route Table
+  # -----------------------------
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref BankingVPC
+      Tags:
+        - Key: Name
+          Value: banking-public-route-table
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # -----------------------------
+  # Security Group
+  # -----------------------------
+
+  BankingSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for banking DevOps EC2
+      VpcId: !Ref BankingVPC
+
+      SecurityGroupIngress:
+
+        # SSH
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+        # HTTP
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+      Tags:
+        - Key: Name
+          Value: banking-devops-sg
+
+  # -----------------------------
+  # EC2 Instance
+  # -----------------------------
+
+  BankingEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+
+      InstanceType: !Ref InstanceType
+
+      ImageId: ami-0d15e9052c94acb75
+
+      SubnetId: !Ref PublicSubnet
+
+      SecurityGroupIds:
+        - !Ref BankingSecurityGroup
+
+      Tags:
+        - Key: Name
+          Value: banking-devops-server
+
+Outputs:
+
+  VPCId:
+    Description: Banking VPC ID
+    Value: !Ref BankingVPC
+
+  PublicSubnetId:
+    Description: Public Subnet ID
+    Value: !Ref PublicSubnet
+
+  SecurityGroupId:
+    Description: Security Group ID
+    Value: !Ref BankingSecurityGroup
+
+  EC2InstanceId:
+    Description: EC2 Instance ID
+    Value: !Ref BankingEC2
+
+  PublicIP:
+    Description: EC2 Public IP
+    Value: !GetAtt BankingEC2.PublicIp

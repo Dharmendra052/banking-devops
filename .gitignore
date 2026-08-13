@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+
+# Logs
+logs/
+*.log
+
+# Backups
+backups/
+
+# Jenkins
+jenkins/workspace/
+jenkins/*.log
+
+# Docker
+docker/*.tar
+docker/*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# AWS credentials
+.aws/
