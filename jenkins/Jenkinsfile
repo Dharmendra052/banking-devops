@@ -1,0 +1,103 @@
+pipeline {
+
+    agent any
+
+    environment {
+        AWS_REGION = 'ap-south-1'
+        ECR_REGISTRY = '923093694371.dkr.ecr.ap-south-1.amazonaws.com'
+        ECR_REPOSITORY = 'banking-app'
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        IMAGE_NAME = "${ECR_REGISTRY}/${ECR_REPOSITORY}:${BUILD_NUMBER}"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Test Application') {
+            steps {
+                sh '''
+                    python3 --version
+                    pip3 --version
+
+                    python3 -m py_compile application/app.py
+                '''
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                    docker build \
+                      -t ${IMAGE_NAME} \
+                      application/
+                '''
+            }
+        }
+
+        stage('Login to ECR') {
+            steps {
+                sh '''
+                    aws ecr get-login-password \
+                      --region ${AWS_REGION} | \
+                    docker login \
+                      --username AWS \
+                      --password-stdin ${ECR_REGISTRY}
+                '''
+            }
+        }
+
+        stage('Push Image to ECR') {
+            steps {
+                sh '''
+                    docker push ${IMAGE_NAME}
+                '''
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh '''
+                    kubectl set image deployment/banking-app \
+                      banking-app=${IMAGE_NAME} \
+                      -n banking
+                '''
+            }
+        }
+
+        stage('Wait for Rollout') {
+            steps {
+                sh '''
+                    kubectl rollout status \
+                      deployment/banking-app \
+                      -n banking \
+                      --timeout=180s
+                '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh '''
+                    kubectl get pods -n banking
+                    kubectl get deployment banking-app -n banking
+                    kubectl get service banking-app -n banking
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Banking application deployed successfully!'
+        }
+
+        failure {
+            echo 'Pipeline failed. Check the Jenkins console output.'
+        }
+    }
+}
